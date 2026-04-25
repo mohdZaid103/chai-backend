@@ -10,7 +10,6 @@ import jwt from "jsonwebtoken"
 import mongoose from 'mongoose';
 
 
-
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
 
@@ -26,9 +25,9 @@ const generateAccessAndRefreshTokens = async (userId) => {
 
         user.refreshToken = refreshToken;
 
-        await user.save({ validateBeforeSave: false });
+        await user.save({validateBeforeSave: false});
 
-        return { accessToken, refreshToken };
+        return { accessToken , refreshToken };
 
     } catch (error) {
         throw new ApiError(
@@ -77,7 +76,7 @@ const registerUser = asyncHandler(async (req, res)=>{
     }
 
     //required files provided by user or not
-    const avatarLocalPath = req.files?.avatar[0]?.path;
+    const avatarLocalPath = req.files?.avatar?.[0]?.path;
     let coverImageLocalPath;
     if(req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length>0){
         coverImageLocalPath = req.files.coverImage[0].path
@@ -180,8 +179,8 @@ const logoutUser = asyncHandler(async(req,res)=>{
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set:{
-                refreshToken:undefined
+            $unset:{
+                refreshToken:1
             }
         },
         {
@@ -200,7 +199,8 @@ const logoutUser = asyncHandler(async(req,res)=>{
 })
 
 const refreshAccessToken = asyncHandler(async (req,res)=>{
-    const incomingRefreshToken = req.cookues.refreshToken|| req.body.refreshToken
+
+    const incomingRefreshToken = req.cookies.refreshToken|| req.body.refreshToken
     if(!incomingRefreshToken){
         throw new ApiError(401,"unauthorized request")
     }
@@ -213,7 +213,6 @@ const refreshAccessToken = asyncHandler(async (req,res)=>{
         if(!user){
             throw new ApiError(401,"invalid refresh token")
         }
-    
         if(incomingRefreshToken!==user?.refreshToken){
             throw new ApiError(401, "invalid refresh Token either expired or used")
         }
@@ -222,10 +221,10 @@ const refreshAccessToken = asyncHandler(async (req,res)=>{
             httpOnly:true,
             secure:true
         }
-        const {ccessToken, NewRefreshToken} = await generateAccessAndRefreshTokens(user._id)
-    
+        const {accessToken, NewRefreshToken} = await generateAccessAndRefreshTokens(user._id)
+
         return res.
-        status.
+        status(200).
         cookie("accessToken",accessToken,options).
         cookie("refreshToken",NewRefreshToken,options).
         json(
@@ -246,10 +245,10 @@ const changeCurrentPassword = asyncHandler(async(req,res)=>{
     if(newPassword!==confPassword){
         throw new ApiError(400,"Password doesn't matched" )
     }
-    const user = User.findById(req.user?._id)
-    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+    const user =await User.findById(req.user?._id)
+    const isOldPasswordCorrect = await user.isPasswordCorrect(oldPassword)
 
-    if(!isPasswordCorrect){
+    if(!isOldPasswordCorrect){
         throw new ApiError(400, "Invalid old password")
     }
 
@@ -262,18 +261,17 @@ const changeCurrentPassword = asyncHandler(async(req,res)=>{
 })
 
 const getCurrentUser = asyncHandler(async(req,res)=>{
-    return res.status(200).
-    json(200, req.user, "current user fetched successfully")
+    return res.status(200).json(new ApiResponse(200, req.user, "current user fetched successfully"))
 }) 
 
 const updateAccountDetails = asyncHandler(async(req,res)=>{
     const {fullName,email} = req.body
 
     if(!fullName || !email){
-        throw new ApiError(400,"All fields arae required")
+        throw new ApiError(400,"All fields are required")
     }
 
-    const user= User.findByIdAndUpdate(
+    const user= await User.findByIdAndUpdate(
         req.user?._id,
         {
             $set:{
