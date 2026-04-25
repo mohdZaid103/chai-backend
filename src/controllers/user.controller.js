@@ -6,21 +6,36 @@ import { upload } from '../middlewares/multer.middleware.js';
 import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { response } from 'express';
+import jwt from "jsonwebtoken"
 
-const generateAccessAndRefreshTokens = async(userId)=>{
+
+
+const generateAccessAndRefreshTokens = async (userId) => {
     try {
-        const user = await User.findById(userId)
-        const accessToken = user.generateRefreshToken()
-        const refreshToken= user.generateAccessToken()
-        user.refreshToken = refreshToken
-        await user.save({validateBeforeSave:false})
 
-        return {accessToken,refreshToken}
+        const user = await User.findById(userId);
+
+        if (!user) {
+            throw new ApiError(404, "User not found");
+        }
+
+        const accessToken = user.generateAccessToken();
+
+        const refreshToken = user.generateRefreshToken();
+
+        user.refreshToken = refreshToken;
+
+        await user.save({ validateBeforeSave: false });
+
+        return { accessToken, refreshToken };
 
     } catch (error) {
-        throw new ApiError(500,"something went wrong while generating tokens")
+        throw new ApiError(
+            error?.statusCode || 500,
+            error?.message || "Token generation failed"
+        );
     }
-}
+};
 
 /*->get user details from frontend
 ->validate user data- data not empty
@@ -116,7 +131,7 @@ const loginUser = asyncHandler(async (req,res)=>{
     //get data from req body
     const {email, username, password} = req.body
     
-    if(!username || !email){
+    if(!username && !email){
         throw new ApiError(400, "username or email is required")
     }
 
@@ -127,7 +142,7 @@ const loginUser = asyncHandler(async (req,res)=>{
         ]
     })
     if(!user){
-        throw new ApiError(404, "user does not exist")
+        throw new ApiError(401, "user does not exist")
     }
 
     const isPasswordValid = await user.isPasswordCorrect(password)
@@ -183,4 +198,46 @@ const logoutUser = asyncHandler(async(req,res)=>{
     json(new ApiResponse(200,{},"user logged out successfully"))
 })
 
-export {registerUser, loginUser, logoutUser}
+const refreshAccessToken = asyncHandler(async (req,res)=>{
+    const incomingRefreshToken = req.cookues.refreshToken|| req.body.refreshToken
+    if(!incomingRefreshToken){
+        throw new ApiError(401,"unauthorized request")
+    }
+
+    try {
+        const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
+    
+        const user = await User.findById(decodedToken?._id)
+    
+        if(!user){
+            throw new ApiError(401,"invalid refresh token")
+        }
+    
+        if(incomingRefreshToken!==user?.refreshToken){
+            throw new ApiError(401, "invalid refresh Token either expired or used")
+        }
+    
+        const options = {
+            httpOnly:true,
+            secure:true
+        }
+        const {ccessToken, NewRefreshToken} = await generateAccessAndRefreshTokens(user._id)
+    
+        return res.
+        status.
+        cookie("accessToken",accessToken,options).
+        cookie("refreshToken",NewRefreshToken,options).
+        json(
+            new ApiResponse(
+                200,
+                {accessToken,NewRefreshToken},
+                "access token refreshed"
+            )
+        )
+    } catch (error) {
+        throw new ApiError(401, error?.message||"invalid refresh token")
+    }
+})
+
+
+export {registerUser, loginUser, logoutUser,refreshAccessToken}
