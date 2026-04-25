@@ -331,10 +331,10 @@ const updateUserCoverImage = asyncHandler(async(req,res)=>{
         )
     }
 
-    const user = User.findByIdAndUpdate(
-        user?._id,
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
         {
-            coverImage = coverImage.url
+            coverImage:coverImage.url
         },
         {new:true}
     ).select("-password")
