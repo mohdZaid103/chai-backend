@@ -18,10 +18,10 @@ const getAllVideos= asyncHandler(async(req,res)=>{
 
     const matchStage = {
         $match:{
-            ...ApiError(query&&{
+            ...(query&&{
                 titel:{$regex:query,$options:"i"}
             }),
-            ...ApiError(userId&&{
+            ...(userId&&{
                 owner:new mongoose.Types.ObjectId(userId)
             })
         }
@@ -92,7 +92,8 @@ const publishAVideo =asyncHandler(async(req,res)=>{
         description,
         videoFile:videoUpload.url,
         thumbnail:thumbnailUpload.url,
-        owner:req.userId,
+        duration: videoUpload.duration,
+        owner:req.user._id,
         isPublished:true
 
     })
